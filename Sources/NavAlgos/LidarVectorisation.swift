@@ -4,6 +4,7 @@
 
 import Foundation
 import simd
+import SpriteKit
 
 struct LidarConfig{
     static let imgWidth: Double = 256.0

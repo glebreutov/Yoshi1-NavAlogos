@@ -16,28 +16,33 @@ struct WorldModel{
 
 
 public struct VehiclePose{
-    let head: simd_double2
-    let tail: simd_double2
+    public let head: simd_double2
+    public let tail: simd_double2
+    
+    public init(head: simd_double2, tail: simd_double2) {
+        self.head = head
+        self.tail = tail
+    }
 }
 public struct TrajectoryModel{
-    let turnRadius: Double
+    public let turnRadius: Double
     //position where we starting motion
-    let startPose: VehiclePose
+    public let startPose: VehiclePose
     //position where we going to reach
-    let destPose: VehiclePose
+    public let destPose: VehiclePose
 
     //center of the turn radius number one
-    let turnPoint0: simd_double2
-    let turnPoint0RotationCloclwise: Bool
+    public let turnPoint0: simd_double2
+    public let turnPoint0RotationCloclwise: Bool
 
     //center of the turn radius number two
-    let turnPoint1: simd_double2
+    public let turnPoint1: simd_double2
 
     //point where we changing direction of steering
-    let crossoverPoint: simd_double2
+    public let crossoverPoint: simd_double2
 
     //
-    let endOfSteerPoint: simd_double2
+    public let endOfSteerPoint: simd_double2
 }
 
 public func trajectoryLocal(turnRadius: Double, dest: simd_double2) -> TrajectoryModel? {
@@ -96,26 +101,18 @@ public func pointRelativeToGlobal(startPose: VehiclePose, dest: simd_double2) ->
 }
 
 public func trajectoryGlobal(startPose: VehiclePose, dest: simd_double2, turnRadius: Double) -> TrajectoryModel? {
+    let localDest = pointReltiveToPose(startPose: startPose, dest: dest)
 
-    let unitY = normalize(startPose.head - startPose.tail)
-    let unitX = rotateVec(v: unitY, angle: -.pi / 2)
-
-    let startAngle = axisAngle2(v: unitX)
-//    let startAngle = length(startPose.head) > 0 ? .pi / 2 - axisAngle(v: startPose.head - startPose.tail) : 0
-    let start = startPose.head
-    let localDest = rotateVec(v: dest - start, angle: startAngle)
-    //let localOrigin = rotateVec(v: dest - start, angle: startAngle)
-//    assert(abs(distance(start, dest) - length(localDest)) < 0.0001)
     if let traj = trajectoryLocal(turnRadius: turnRadius, dest: localDest) {
 
-        let turnPoint0Global = rotateVec(v: traj.turnPoint0, angle: -startAngle) + start
-        let turnPoint1Global = rotateVec(v: traj.turnPoint1, angle: -startAngle) + start
-        let r1Global = rotateVec(v: traj.crossoverPoint, angle: -startAngle) + start
-        let r2Global = rotateVec(v: traj.endOfSteerPoint, angle: -startAngle) + start
+        let turnPoint0Global = pointRelativeToGlobal(startPose: startPose, dest: traj.turnPoint0)
+        let turnPoint1Global = pointRelativeToGlobal(startPose: startPose, dest: traj.turnPoint1)
+        let r1Global = pointRelativeToGlobal(startPose: startPose, dest: traj.crossoverPoint)
+        let r2Global = pointRelativeToGlobal(startPose: startPose, dest: traj.endOfSteerPoint)
 
-        let destPoseHead = rotateVec(v: traj.destPose.head, angle: -startAngle) + start
-        let destPoseTail = rotateVec(v: traj.destPose.tail, angle: -startAngle) + start
-        //assert(distance(destPoseHead, dest) < 0.0001)
+        let destPoseHead = pointRelativeToGlobal(startPose: traj.startPose, dest: traj.destPose.head)
+        let destPoseTail = pointRelativeToGlobal(startPose: traj.startPose, dest: traj.destPose.tail)
+
         return TrajectoryModel(
                 turnRadius: turnRadius,
                 startPose: startPose,
