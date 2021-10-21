@@ -14,115 +14,84 @@ struct LidarConfig{
     static let vAngle: Double = 0.46853139996528625
 
 }
-func loadCones() -> [[Float32]]{
-    let rData: Data = try! Data(contentsOf: URL(fileURLWithPath: "cones.bin"))
 
-    var rArray: [Float32]?
-
-    rData.withUnsafeBytes { (bytes: UnsafePointer<Float32>) in
-        rArray = Array(UnsafeBufferPointer(start: bytes, count: rData.count / MemoryLayout<Float32>.size))
-    }
-
-    let height = 192
-    let width = 256
-    var res: [[Float32]] = []
-
-    for row in 0...(height - 1) {
-    //for row in stride(from: height - 1, through: 0, by: -1) {
-        var rowArr: [Float32] = []
-        //for col in stride(from: width - 1, through: 0, by: -1){
-        for col in 0...(width - 1){
-
-            let depth = rArray![row * height + col]
-            rowArr.append(depth)
-
-        }
-
-        res.append(rowArr)
-    }
-
-    return res
-}
-public func realDistVec2d(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) -> simd_float3{
-    let halfWidth = LidarConfig.imgWidth / 2.0
-    let halfHeight = LidarConfig.imgHeight / 2.0
-
-
-    //let hAngleMax = LidarConfig.hAngle
-    //let vAngleMax = verticalCameraAngle(intrinsics: intrinsics)
-
-
-    let hAngle = centeredX * (LidarConfig.hAngle / halfWidth)
-    let vAngle = -1 * centeredY * (LidarConfig.vAngle / halfHeight)
-
-    let vec = simd_float3(0, 0, depth)
-
-    let rotY = rotateY(vec: vec, angleRad: Float(hAngle))
-
-    //rotateVec(v: simd_double2(x: 0, y: depth), angle: hAngle)
-    return rotateX(vec: rotY, angleRad: Float(vAngle))
-}
-
-public func realDistVec(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) -> simd_float3{
-    let halfWidth = LidarConfig.imgWidth / 2.0
-    let halfHeight = LidarConfig.imgHeight / 2.0
-
-
-
-    let hAngle = centeredX * (LidarConfig.hAngle / halfWidth)
-    let vAngle = -1 * centeredY * (LidarConfig.vAngle / halfHeight)
-
-    let vec = simd_float3(0, 0, depth)
-
-//    var hAngleNorm = hAngle
-//    if(hAngle < 0){
-//        hAngleNorm = .pi + hAngle
-//    }else {
-//        hAngleNorm = .pi / 2 - hAngle
-//    }
+public func realDistVecLinear(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) -> simd_double3{
+//    let halfWidth = LidarConfig.imgWidth / 2.0
+//    let halfHeight = LidarConfig.imgHeight / 2.0
+//    let hAngle: Double = abs(centeredX) * (LidarConfig.hAngle / halfWidth)
+//    let vAngle: Double = abs(centeredY) * (LidarConfig.vAngle / halfHeight)
 //
-//    var vAngleNorm = vAngle
-//    if(vAngle < 0){
-//        vAngleNorm = .pi + vAngle
-//    }else{
-//        vAngleNorm = .pi / 2  - vAngle
-//    }
+//    let d1 = abs(Double(depth) / cos(hAngle))
+//    let x1 = d1 * cos(hAngle) * (centeredX / abs(centeredX))
+//    let y1 = d1 * cos(vAngle) * (centeredY / abs(centeredY))
+//    let vec = simd_float3(x: Float(x1), y: Float(y1), z: Float(d1))
 
-    let rotY = rotateY(vec: vec, angleRad: Float(hAngle))
+    let mult: Double = 213.0
+    let vec = simd_double3(Double(centeredX) / mult, Double(centeredY) / mult, Double(depth))
+//    let rotY = rotateY(vec: vec, angleRad: Float(hAngle))
+//    let finalVec = rotateX(vec: rotY, angleRad: Float(vAngle))
+    let oneDegree = 0.0174533
 
-    return rotateX(vec: rotY, angleRad: Float(vAngle))
+    let adjustY = rotateY(vec: vec, angleRad: 0 * oneDegree)
+    let adjustX = rotateX(vec: adjustY, angleRad: 4 * oneDegree)
+    let adjustZ = rotateZ(vec: adjustX, angleRad: -2.2 * oneDegree)
+    return adjustZ
 }
 
-func rotateX(vec: simd_float3, angleRad: Float) -> simd_float3 {
-    let rotationMatrix = simd_float3x3(rows: [
-        simd_float3(1, 0, 0),
-        simd_float3(0, cos(angleRad), -sin(angleRad)),
-        simd_float3(0, sin(angleRad), cos(angleRad)),
+public func realDistVec(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) -> simd_double3{
+    let halfWidth = LidarConfig.imgWidth / 2.0
+    let halfHeight = LidarConfig.imgHeight / 2.0
+    let hAngle: Double = centeredX * (LidarConfig.hAngle / halfWidth)
+    let vAngle: Double = -1 * centeredY * (LidarConfig.vAngle / halfHeight)
+
+//    let d1 = abs(Double(depth) /  sin(hAngle))
+//    let vec = simd_float3(x: 0, y: 0, z: Float(d1))
+//let vec3d = simd_float3(Float(x) / 180.0, Float(y) / 180.0, Float(depth))
+    let vec = simd_double3(x: 0, y: 0, z: Double(depth))
+
+
+    let oneDegree = 0.0174533
+    let rotY = rotateY(vec: vec, angleRad: hAngle)
+    let finalVec = rotateX(vec: rotY, angleRad: vAngle)
+    let adjustY = rotateY(vec: finalVec, angleRad: 0 * oneDegree)
+    let adjustX = rotateX(vec: adjustY, angleRad: 4 * oneDegree)
+    let adjustZ = rotateZ(vec: adjustX, angleRad: -2.2 * oneDegree)
+    return adjustZ
+}
+
+
+func rotateX(vec: simd_double3, angleRad: Double) -> simd_double3 {
+    let rotationMatrix = simd_double3x3(rows: [
+        simd_double3(1, 0, 0),
+        simd_double3(0, cos(angleRad), -sin(angleRad)),
+        simd_double3(0, sin(angleRad), cos(angleRad)),
     ])
 
     return rotationMatrix * vec
 }
 
-func rotateY(vec: simd_float3, angleRad: Float) -> simd_float3 {
-    let rotationMatrix = simd_float3x3(rows: [
-        simd_float3(cos(angleRad), 0, sin(angleRad)),
-        simd_float3(0, 1, 0),
-        simd_float3(-sin(angleRad), 0, cos(angleRad)),
+
+
+func rotateY(vec: simd_double3, angleRad: Double) -> simd_double3 {
+    let rotationMatrix = simd_double3x3(rows: [
+        simd_double3(cos(angleRad), 0, sin(angleRad)),
+        simd_double3(0, 1, 0),
+        simd_double3(-sin(angleRad), 0, cos(angleRad)),
     ])
 
     return rotationMatrix * vec
 }
 
-func rotateZ(vec: simd_float3, angleRad: Float) -> simd_float3 {
-    let rotationMatrix = simd_float3x3(rows: [
-        simd_float3(cos(angleRad), -sin(angleRad), 0),
-        simd_float3(sin(angleRad), cos(angleRad), 0),
-        simd_float3(0, 0, 1),
+
+func rotateZ(vec: simd_double3, angleRad: Double) -> simd_double3 {
+    let rotationMatrix = simd_double3x3(rows: [
+        simd_double3(cos(angleRad), -sin(angleRad), 0),
+        simd_double3(sin(angleRad), cos(angleRad), 0),
+        simd_double3(0, 0, 1),
     ])
 
     return rotationMatrix * vec
 }
-
 
 func collision(map: [simd_double2], origin: simd_double2, dest: simd_double2, offset: Double) -> [simd_double2] {
     let destAngle = -1 * axisAngle(v: dest) + .pi / 2
@@ -148,9 +117,9 @@ func intersectionPoints(map: [simd_double2], origin: simd_double2, dest: simd_do
     return interPointsGlobal
 }
 
-func plotNearestSubDest(map: [simd_double2], origin: simd_double2, dest: simd_double2, offset: Double) -> simd_double2 {
+public func plotNearestSubDest(map: [simd_double2], origin: simd_double2, dest: simd_double2, offset: Double) -> simd_double2 {
     print("origin \(origin) dest \(dest)")
-    if(distance(origin, dest) < 0.001){
+    if(distance(origin, dest) < 0.01){
         return dest
     }
 
@@ -162,11 +131,11 @@ func plotNearestSubDest(map: [simd_double2], origin: simd_double2, dest: simd_do
         let destAngle = -1 * axisAngle(v: dest - origin) + .pi / 2
         let nearCollisionLocal = rotateVec(v: nearCollision - origin, angle: destAngle)
 
-        let subDestLocal = nearCollisionLocal + simd_double2(x: offset * 2, y: 0)
+        let subDestLocal = nearCollisionLocal + xSign(nearCollisionLocal) * simd_double2(x: 3 * offset, y: 0)
         let subDestGlobal = rotateVec(v: subDestLocal, angle: -1 * destAngle) + origin
 
 
-        assert(intersectionPoints(map: [subDestGlobal], origin: origin, dest: dest, offset: offset).isEmpty)
+        //assert(intersectionPoints(map: [subDestGlobal], origin: origin, dest: dest, offset: offset).isEmpty)
 
 //        assert(distance(subDest, nearCollision) >= 2 * offset)
 //        assert(

@@ -5,7 +5,7 @@
 import Foundation
 import simd
 
-func xSign(_ v: simd_double2) -> Double {
+public func xSign(_ v: simd_double2) -> Double {
     if(v.x != 0.0){
         return v.x / abs(v.x)
     }else{
@@ -14,7 +14,7 @@ func xSign(_ v: simd_double2) -> Double {
 
 }
 
-func ySign(_ v: simd_double2) -> Double {
+public func ySign(_ v: simd_double2) -> Double {
     if(v.y != 0.0){
         let a = v.y / abs(v.y)
         return a
@@ -24,7 +24,7 @@ func ySign(_ v: simd_double2) -> Double {
 
 }
 
-func angle(v1: simd_double2, v2: simd_double2) -> Double {
+public func angle(v1: simd_double2, v2: simd_double2) -> Double {
     let dotProduct = dot(v1, v2)
     let lengths = length(v1) * length(v2)
 
@@ -33,14 +33,14 @@ func angle(v1: simd_double2, v2: simd_double2) -> Double {
     return vectorAngle
 }
 
-func axisAngle2(v: simd_double2) -> Double{
+public func axisAngle2(v: simd_double2) -> Double{
     let vn = normalize(v)
     let atan: Double = atan2(vn.x, vn.y) - .pi / 2
 
     return atan
 }
 
-func axisAngle(v: simd_double2) -> Double {
+public func axisAngle(v: simd_double2) -> Double {
     angle(v1: v, v2: WorldModel.xAxis)
 }
 
@@ -49,7 +49,7 @@ func ordinateAngle(v: simd_double2) -> Double {
 }
 
 //rotate from axis X counter cloclwise
-func rotateVec(v: simd_double2, angle: Double) -> simd_double2 {
+public func rotateVec(v: simd_double2, angle: Double) -> simd_double2 {
     let rotationMatrix = simd_double2x2(rows: [
         simd_double2(cos(angle), -sin(angle)),
         simd_double2(sin(angle), cos(angle)),
