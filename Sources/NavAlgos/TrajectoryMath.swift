@@ -103,7 +103,7 @@ public func trajectoryLocal(turnRadius: Double, dest: simd_double2) -> Trajector
     let origin = WorldModel.origin
     let turnPoint0 = turnPoint0(dest: dest, r: turnRadius)
 
-    guard let r1 = r1gCalc(turnPoint0: turnPoint0, dest: dest) else {
+    guard let r1 = r1Calc(turnPoint0: turnPoint0, dest: dest) else {
         return nil
     }
 
