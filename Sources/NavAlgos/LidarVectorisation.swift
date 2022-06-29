@@ -36,7 +36,42 @@ public func realDistVecLinear(centeredX: CGFloat, centeredY: CGFloat, depth: Flo
     let adjustX = rotateX(vec: adjustY, angleRad: 4 * oneDegree)
     let adjustZ = rotateZ(vec: adjustX, angleRad: -2.2 * oneDegree)
     return adjustZ
+    
+//    return vec
 }
+
+
+public func pinholeVec(x: Float, y: Float, depth: Float32) -> simd_double3 {
+//    let cameraIntrinsics = simd_float3x3([
+//        [1413.7269, 0.0, 0.0],
+//        [0.0, 1413.7269, 0.0],
+//        [965.7953, 717.2555, 1.0]
+//    ])
+
+    let cameraIntrinsics = simd_float3x3([
+        [1413.7269, 0.0, 0.0],
+        [0.0, 1413.7269, 0.0],
+        [965.7953, 717.2555, 1.0]
+    ])
+    
+    let depthMM: Float = depth
+    
+    
+    let fx = cameraIntrinsics[0][0] / 15.75
+    let fy = cameraIntrinsics[1][1] / 15.75
+    
+//    let ox = cameraIntrinsics[2][0]
+//    let oy = cameraIntrinsics[2][1]
+    let ox = Float(LidarConfig.imgWidth) / 2.0
+    let oy = Float(LidarConfig.imgHeight) / 2.0
+    
+    let xrw = (x - ox) * depthMM / fx
+    let yrw = (y - oy) * depthMM / fy
+    
+    
+    return simd_double3(Double(xrw), Double(yrw), Double(depth))
+}
+
 
 public func realDistVec(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) -> simd_double3{
     let halfWidth = LidarConfig.imgWidth / 2.0
@@ -53,14 +88,16 @@ public func realDistVec(centeredX: CGFloat, centeredY: CGFloat, depth: Float32) 
     let oneDegree = 0.0174533
     let rotY = rotateY(vec: vec, angleRad: hAngle)
     let finalVec = rotateX(vec: rotY, angleRad: vAngle)
-    let adjustY = rotateY(vec: finalVec, angleRad: 0 * oneDegree)
-    let adjustX = rotateX(vec: adjustY, angleRad: 4 * oneDegree)
-    let adjustZ = rotateZ(vec: adjustX, angleRad: -2.2 * oneDegree)
-    return adjustZ
+    
+    return finalVec
+//    let adjustY = rotateY(vec: finalVec, angleRad: 0 * oneDegree)
+//    let adjustX = rotateX(vec: adjustY, angleRad: 4 * oneDegree)
+//    let adjustZ = rotateZ(vec: adjustX, angleRad: -2.2 * oneDegree)
+//    return adjustZ
 }
 
 
-func rotateX(vec: simd_double3, angleRad: Double) -> simd_double3 {
+public func rotateX(vec: simd_double3, angleRad: Double) -> simd_double3 {
     let rotationMatrix = simd_double3x3(rows: [
         simd_double3(1, 0, 0),
         simd_double3(0, cos(angleRad), -sin(angleRad)),
@@ -72,7 +109,7 @@ func rotateX(vec: simd_double3, angleRad: Double) -> simd_double3 {
 
 
 
-func rotateY(vec: simd_double3, angleRad: Double) -> simd_double3 {
+public func rotateY(vec: simd_double3, angleRad: Double) -> simd_double3 {
     let rotationMatrix = simd_double3x3(rows: [
         simd_double3(cos(angleRad), 0, sin(angleRad)),
         simd_double3(0, 1, 0),
@@ -83,7 +120,7 @@ func rotateY(vec: simd_double3, angleRad: Double) -> simd_double3 {
 }
 
 
-func rotateZ(vec: simd_double3, angleRad: Double) -> simd_double3 {
+public func rotateZ(vec: simd_double3, angleRad: Double) -> simd_double3 {
     let rotationMatrix = simd_double3x3(rows: [
         simd_double3(cos(angleRad), -sin(angleRad), 0),
         simd_double3(sin(angleRad), cos(angleRad), 0),
@@ -93,8 +130,18 @@ func rotateZ(vec: simd_double3, angleRad: Double) -> simd_double3 {
     return rotationMatrix * vec
 }
 
+public func rotateEuler(vec: simd_double3, roll: Double = 0.0, pitch: Double = 0.0, yaw: Double = 0.0) -> simd_double3 {
+    rotateX(
+        vec: rotateY(
+            vec: rotateZ(
+                vec: vec,
+                angleRad: roll),
+            angleRad: yaw),
+        angleRad: pitch)
+}
+
 func collision(map: [simd_double2], origin: simd_double2, dest: simd_double2, offset: Double) -> [simd_double2] {
-    let destAngle = -1 * axisAngle(v: dest) + .pi / 2
+    let destAngle = -1 * axisAngle2(v: dest) + .pi / 2
     let destLen = length(dest)
     let alignedMap = map.map {a in rotateVec(v: a, angle: destAngle) - origin}
     let interPointsLocal = alignedMap.filter {a in abs(a.x) < offset && a.y > 0 && a.y < destLen}
@@ -104,7 +151,7 @@ func collision(map: [simd_double2], origin: simd_double2, dest: simd_double2, of
 }
 func intersectionPoints(map: [simd_double2], origin: simd_double2, dest: simd_double2, offset: Double) -> [simd_double2] {
     let localDest = dest - origin
-    let destAngle = -1 * axisAngle(v: localDest) + .pi / 2
+    let destAngle = -1 * axisAngle2(v: localDest) + .pi / 2
     let destLen = length(localDest)
 
     let alignedMap = map.map {a in rotateVec(v: a - origin, angle: destAngle)}
@@ -128,7 +175,7 @@ public func plotNearestSubDest(map: [simd_double2], origin: simd_double2, dest: 
             .min(by: { a, b in simd_length(a) > simd_length(b)})
     if let nearCollision = maybeFarCollision {
 
-        let destAngle = -1 * axisAngle(v: dest - origin) + .pi / 2
+        let destAngle = -1 * axisAngle2(v: dest - origin) + .pi / 2
         let nearCollisionLocal = rotateVec(v: nearCollision - origin, angle: destAngle)
 
         let subDestLocal = nearCollisionLocal + xSign(nearCollisionLocal) * simd_double2(x: 3 * offset, y: 0)

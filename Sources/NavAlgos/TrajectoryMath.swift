@@ -23,7 +23,48 @@ public struct VehiclePose{
         self.head = head
         self.tail = tail
     }
+    
+    public static let zeroPose = VehiclePose(head: simd_double2(x: 0, y: 0), tail: simd_double2(x: 0, y: -1))
 }
+
+extension VehiclePose {
+    public func global(frame: VehiclePose) -> VehiclePose {
+        return VehiclePose(
+            head: inGlobalReferenceFrame(frame: frame, localPoint: head),
+            tail: inGlobalReferenceFrame(frame: frame, localPoint: tail)
+        )
+    }
+    
+    public func local(frame: VehiclePose) -> VehiclePose {
+        return VehiclePose(
+            head: inLocalReferenceFrame(frame: frame, globalPoint: head),
+            tail: inLocalReferenceFrame(frame: frame, globalPoint: tail)
+        )
+    }
+    
+    public static func -(_ pose1: VehiclePose, _ pose2: VehiclePose) -> VehiclePose {
+        VehiclePose(head: pose1.head - pose2.head, tail: pose1.tail - pose2.tail)
+    }
+
+    public static func +(_ pose1: VehiclePose, _ pose2: VehiclePose) -> VehiclePose {
+        VehiclePose(head: pose1.head + pose2.head, tail: pose1.tail + pose2.tail)
+    }
+}
+
+extension simd_double2 {
+    public func global(pose: VehiclePose) -> simd_double2 {
+        return inGlobalReferenceFrame(frame: pose, localPoint: self)
+    }
+    
+    public func local(pose: VehiclePose) -> simd_double2 {
+        return inLocalReferenceFrame(frame: pose, globalPoint: self)
+    }
+    
+    public func length() -> Double {
+        simd_length(self)
+    }
+}
+
 public struct TrajectoryModel{
     public let turnRadius: Double
     //position where we starting motion
@@ -43,13 +84,26 @@ public struct TrajectoryModel{
 
     //
     public let endOfSteerPoint: simd_double2
+
+    public static let stopTrajectory = TrajectoryModel(
+        turnRadius: 0.6,
+        startPose: VehiclePose.zeroPose,
+        destPose: VehiclePose.zeroPose,
+        turnPoint0: simd_double2(0.6, 0),
+        turnPoint0RotationClockwise: true,
+        turnPoint1: simd_double2(-0.6, 0),
+        crossoverPoint: simd_double2(0.0, 0),
+        endOfSteerPoint: simd_double2(0.0, 0)
+    )
 }
 
 public func trajectoryLocal(turnRadius: Double, dest: simd_double2) -> TrajectoryModel? {
+    
+    
     let origin = WorldModel.origin
     let turnPoint0 = turnPoint0(dest: dest, r: turnRadius)
 
-    guard let r1 = r1Calc(turnPoint0: turnPoint0, dest: dest) else {
+    guard let r1 = r1gCalc(turnPoint0: turnPoint0, dest: dest) else {
         return nil
     }
 
@@ -57,9 +111,15 @@ public func trajectoryLocal(turnRadius: Double, dest: simd_double2) -> Trajector
 
     let r2 = r2Calc(turnPoint1: turnPoint1, dest: dest, turnRadius: turnRadius)
 
-    let destTail = dest - normalize(dest) * 10
+    let destTail = dest * 0.9
     let startPose = VehiclePose(head: origin, tail: simd_double2(x: 0, y: -1))
     let turnPoint0Rotation = arcRotation(center: turnPoint0, tail: startPose.tail, head: startPose.head)
+    
+    guard length(dest) - length(r2) > -0.001 else {
+        print("r2 beyond dest. dest: ", dest)
+        return nil
+    }
+    
     return TrajectoryModel(
             turnRadius: turnRadius,
             startPose: startPose,
@@ -73,37 +133,35 @@ public func trajectoryLocal(turnRadius: Double, dest: simd_double2) -> Trajector
 }
 
 
-public func pointRelativeToPose(startPose: VehiclePose, dest: simd_double2) -> simd_double2 {
-    let unitY = normalize(startPose.head - startPose.tail)
-    //let unitY1 = normalize(startPose.tail)
-    let unitX = rotateVec(v: unitY, angle: -.pi / 2)
 
-    let startAngle = axisAngle2(v: unitX)
-    
-    return rotateVec(v: dest  - startPose.head, angle: startAngle)
-}
 
-public func pointRelativeToGlobal(startPose: VehiclePose, dest: simd_double2) -> simd_double2 {
-    let unitY = normalize(startPose.head - startPose.tail)
-    let unitX = rotateVec(v: unitY, angle: -.pi / 2)
+//
+//public func pointRelativeToPose(startPose: VehiclePose, dest: simd_double2) -> simd_double2 {
+////    let unitY = normalize(startPose.head - startPose.tail)
+////    let unitX = rotateVec(v: unitY, angle: -.pi / 2)
+////
+////    let startAngle = axisAngle2(v: unitX)
+//
+//    //return rotateVec(v: dest  - startPose.head, angle: -startAngle)
+//
+//    return inLocalReferenceFrame(frame: startPose, globalPoint: dest)
+//}
 
-    let startAngle = axisAngle2(v: unitX)
-    
-    return rotateVec(v: dest, angle: -startAngle) + startPose.head
-}
+
 
 public func trajectoryGlobal(startPose: VehiclePose, dest: simd_double2, turnRadius: Double) -> TrajectoryModel? {
-    let localDest = pointRelativeToPose(startPose: startPose, dest: dest)
+    //let localDest = pointRelativeToPose(startPose: startPose, dest: dest)
+    let localDest = inLocalReferenceFrame(frame: startPose, globalPoint: dest)
 
     if let traj = trajectoryLocal(turnRadius: turnRadius, dest: localDest) {
 
-        let turnPoint0Global = pointRelativeToGlobal(startPose: startPose, dest: traj.turnPoint0)
-        let turnPoint1Global = pointRelativeToGlobal(startPose: startPose, dest: traj.turnPoint1)
-        let r1Global = pointRelativeToGlobal(startPose: startPose, dest: traj.crossoverPoint)
-        let r2Global = pointRelativeToGlobal(startPose: startPose, dest: traj.endOfSteerPoint)
+        let turnPoint0Global = inGlobalReferenceFrame(frame: startPose, localPoint: traj.turnPoint0)
+        let turnPoint1Global = inGlobalReferenceFrame(frame: startPose, localPoint: traj.turnPoint1)
+        let r1Global = inGlobalReferenceFrame(frame: startPose, localPoint: traj.crossoverPoint)
+        let r2Global = inGlobalReferenceFrame(frame: startPose, localPoint: traj.endOfSteerPoint)
 
-        let destPoseHead = pointRelativeToGlobal(startPose: startPose, dest: traj.destPose.head)
-        let destPoseTail = pointRelativeToGlobal(startPose: startPose, dest: traj.destPose.tail)
+        let destPoseHead = inGlobalReferenceFrame(frame: startPose, localPoint: traj.destPose.head)
+        let destPoseTail = inGlobalReferenceFrame(frame: startPose, localPoint: traj.destPose.tail)
 
         return TrajectoryModel(
                 turnRadius: turnRadius,
@@ -122,12 +180,12 @@ public func trajectoryGlobal(startPose: VehiclePose, dest: simd_double2, turnRad
 
 public func localTrajectories(pose: VehiclePose, points: Array<simd_double2>, turnRadius: Double, acc: [TrajectoryModel] = []) ->[TrajectoryModel] {
     if let nextDest = points.first {
-        let localDest = pointRelativeToPose(startPose: pose, dest: nextDest)
+        let localDest = inLocalReferenceFrame(frame: pose, globalPoint: nextDest)
         if let nextManeur = trajectoryLocal(turnRadius: turnRadius, dest: localDest) {
             //assert(length(pose.head + nextManeur.destPose.head - nextDest) < 0.001)
             let globalPose = VehiclePose(
-                    head: pointRelativeToGlobal(startPose: pose, dest: nextManeur.destPose.head),
-                    tail: pointRelativeToGlobal(startPose: pose, dest: nextManeur.destPose.tail)
+                    head: inGlobalReferenceFrame(frame: pose, localPoint: nextManeur.destPose.head),
+                    tail: inGlobalReferenceFrame(frame: pose, localPoint: nextManeur.destPose.tail)
             )
 
             return localTrajectories(
@@ -139,6 +197,32 @@ public func localTrajectories(pose: VehiclePose, points: Array<simd_double2>, tu
         }else{
             print("Can't calculate next pose")
             return acc
+        }
+
+    }else {
+        return acc
+    }
+}
+
+public func localTrajectoriesBestEffort(pose: VehiclePose, points: Array<simd_double2>, turnRadius: Double, acc: [TrajectoryModel] = []) ->[TrajectoryModel] {
+    if let nextDest = points.first {
+        let localDest = inLocalReferenceFrame(frame: pose, globalPoint: nextDest)
+        if let nextManeur = trajectoryLocal(turnRadius: turnRadius, dest: localDest) {
+            //assert(length(pose.head + nextManeur.destPose.head - nextDest) < 0.001)
+            let globalPose = VehiclePose(
+                    head: inGlobalReferenceFrame(frame: pose, localPoint: nextManeur.destPose.head),
+                    tail: inGlobalReferenceFrame(frame: pose, localPoint: nextManeur.destPose.tail)
+            )
+
+            return localTrajectories(
+                    pose: globalPose,
+                    points: Array(points.dropFirst()),
+                    turnRadius: turnRadius,
+                    acc: acc + [nextManeur]
+            )
+        }else{
+            print("Can't calculate traj to \(nextDest), trying next point from \(pose.head)")
+            return localTrajectoriesBestEffort(pose: pose, points: Array(points.dropFirst()), turnRadius: turnRadius, acc: acc)
         }
 
     }else {
@@ -180,9 +264,7 @@ func r1Calc(turnPoint0: simd_double2, dest: simd_double2) -> simd_double2?{
 func r1CalcRwd(turnPoint0: simd_double2, dest: simd_double2) -> simd_double2?{
     let r0 = perpendicular(to: dest, from: turnPoint0)
     if let interPoint = intersect(p1: WorldModel.origin, p2: dest, p3: turnPoint0, p4: r0) {
-        let offset = distance(interPoint, r0)
         let parallel = r0CalcRwd(dest: dest, turnPoint: turnPoint0)
-
         return parallel - (r0 - interPoint) / 2
     }else{
         print("Can't calc r1, no intersect")
@@ -244,10 +326,3 @@ func r1Angle(turnRadius: Double, offset: Double) -> Double{
     return angle
     
 }
-
-
-
-
-
-
-
